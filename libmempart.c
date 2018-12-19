@@ -52,7 +52,7 @@ mempart_t* mempart_load(const void* data, uint32_t size) {
 	mempart_t* mempart = mempart_create(data32[0]);
 	if (!mempart) return NULL;
 	mempart->used_count = data32[1];
-	void* start = data + sizeof(uint32_t) * 3;
+	void* start = (void*)data + sizeof(uint32_t) * 3;
 	uint8_t* offset = start;
 	uint32_t i = 0;
 	for (; i < data32[2]; i++) {
@@ -127,7 +127,7 @@ int mempart_file_open(mempart_t* mempart, const char* filename, const char* mode
 	if (strlen(filename) >= MEMPART_FILENAME_MAX_CHAR) return MEMFILE_OPEN_ERR_NAME_TOOLONG;
 	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node;
 	while (node) {
-		if (!node->next) {
+		if (strcmp(filename, node->name) && !node->next) {
 			mempart_file_node_t* newnode = (mempart_file_node_t*)libmempart_malloc(sizeof(mempart_file_node_t));
 			if (!newnode) return MEMFILE_OPEN_ERR_NOMEMORY;
 			strcpy(newnode->name, filename);
