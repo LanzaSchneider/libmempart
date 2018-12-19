@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 /* Create and dispose */
-mempart_t* mempart_create(size_t size) {
+mempart_t* mempart_create(uint32_t size) {
 	mempart_t* partition = (mempart_t*)libmempart_malloc(sizeof(mempart_t));
 	if (!partition) return NULL;
 	
@@ -46,20 +46,85 @@ void mempart_release(mempart_t* mempart) {
 }
 
 /* Load and Save */
-mempart_t* mempart_load(const void* data, size_t size) {
-	return NULL;
+mempart_t* mempart_load(const void* data, uint32_t size) {
+	if (size < sizeof(uint32_t) * 3) return NULL;
+	uint32_t* data32 = (uint32_t*)data;
+	mempart_t* mempart = mempart_create(data32[0]);
+	if (!mempart) return NULL;
+	mempart->used_count = data32[1];
+	void* start = data + sizeof(uint32_t) * 3;
+	uint8_t* offset = start;
+	uint32_t i = 0;
+	for (; i < data32[2]; i++) {
+		char filename[MEMPART_FILENAME_MAX_CHAR];
+		size_t j = 0;
+		while (offset[j]) {
+			filename[j] = offset[j];
+			j++;
+		}
+		filename[j] = '\0';
+		offset += j + 1;
+		mempart_file_t* file = NULL;
+		if (mempart_file_open(mempart, filename, "rb", &file)) continue;
+		if (*(uint32_t*)(offset)) mempart_file_write(file, offset + sizeof(uint32_t), *(uint32_t*)(offset), 1);
+		offset += *(uint32_t*)(offset);
+		offset += sizeof(uint32_t);
+	}
+	return mempart;
 }
 
-size_t mempart_dump_size(mempart_t* mempart) {
-	return 0;
+uint32_t mempart_dump_size(mempart_t* mempart) {
+	uint32_t offset = sizeof(uint32_t) * 3;
+	uint32_t i = 0;
+	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node->next;
+	while (node) {
+		offset += strlen(node->name) + 1;
+		offset += sizeof(uint32_t);
+		if (node->file) {
+			offset += node->file->size;
+		}
+		node = node->next;
+	}
+	return offset;
 }
 
-size_t mempart_dump(mempart_t* mempart, void* buffer) {
+uint32_t mempart_dump(mempart_t* mempart, void* buf) {
+	uint8_t* buffer = (uint8_t*)buf;
+	uint32_t* buffer32 = (uint32_t*)buffer;
+	uint32_t offset = sizeof(uint32_t) * 3;
+	uint32_t i = 0;
+	buffer32[0] = mempart->size;
+	buffer32[1] = mempart->used_count;
+	buffer32[2] = 0;
+	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node->next;
+	while (node) {
+		strcpy(buffer + offset, node->name);
+		offset += strlen(node->name);
+		buffer[offset] = '\0';
+		offset += 1;
+		
+		if (node->file) {
+			*(uint32_t*)(buffer + offset) = node->file->size;
+			offset += sizeof(uint32_t);
+		} else {
+			*(uint32_t*)(buffer + offset) = 0;
+			offset += sizeof(uint32_t);
+		}
+		
+		if (node->file) {
+			memcpy(buffer + offset, node->file->buffer, node->file->size);
+			offset += node->file->size;
+		}
+		
+		buffer32[2] += 1;
+		node = node->next;
+	}
 	return 0;
 }
 
 /* File utils. */
 int mempart_file_open(mempart_t* mempart, const char* filename, const char* mode, mempart_file_t** file) {
+	if (strlen(filename) >= MEMPART_FILENAME_MAX_CHAR) return MEMFILE_OPEN_ERR_NAME_TOOLONG;
 	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node;
 	while (node) {
 		if (!node->next) {
@@ -93,6 +158,7 @@ int mempart_file_open(mempart_t* mempart, const char* filename, const char* mode
 }
 
 int mempart_file_exist(mempart_t* mempart, const char* filename) {
+	if (strlen(filename) >= MEMPART_FILENAME_MAX_CHAR) return MEMFILE_OPEN_ERR_NAME_TOOLONG;
 	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node;
 	while (node) {
 		if (!strcmp(filename, node->name)) {
@@ -104,6 +170,7 @@ int mempart_file_exist(mempart_t* mempart, const char* filename) {
 }
 
 int mempart_file_delete(mempart_t* mempart, const char* filename) {
+	if (strlen(filename) >= MEMPART_FILENAME_MAX_CHAR) return MEMFILE_OPEN_ERR_NAME_TOOLONG;
 	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node;
 	while (node) {
 		if (!strcmp(filename, node->name)) {
@@ -129,6 +196,7 @@ int mempart_file_delete(mempart_t* mempart, const char* filename) {
 }
 
 int mempart_file_rename(mempart_t* mempart, const char* filename, const char* newname) {
+	if (strlen(filename) >= MEMPART_FILENAME_MAX_CHAR) return MEMFILE_OPEN_ERR_NAME_TOOLONG;
 	mempart_file_node_t* node = (mempart_file_node_t*)mempart->first_node;
 	while (node) {
 		if (!strcmp(filename, node->name)) {
@@ -174,13 +242,13 @@ void mempart_file_rewind(mempart_file_t* file) {
 	file->cursor = 0;
 }
 
-size_t mempart_file_read(mempart_file_t* file, void* buffer, size_t size, size_t count) {
+uint32_t mempart_file_read(mempart_file_t* file, void* buffer, uint32_t size, uint32_t count) {
 	if (!(file->flags & MEMFILE_FLAGS_READABLE)) return 0;
 	if (size > (file->size - file->cursor)) {
 		return 0;
 	}
 		
-	size_t read_count = 0;
+	uint32_t read_count = 0;
 	while ((read_count < count) && ((read_count > 0 ? read_count : 1) * size < (file->size - file->cursor))) {
 		read_count += 1;
 	}
@@ -191,10 +259,10 @@ size_t mempart_file_read(mempart_file_t* file, void* buffer, size_t size, size_t
 	return read_count;
 }
 
-size_t mempart_file_write(mempart_file_t* file, const void* buffer, size_t size, size_t count) {
+uint32_t mempart_file_write(mempart_file_t* file, const void* buffer, uint32_t size, uint32_t count) {
 	if (!(file->flags & MEMFILE_FLAGS_WRITABLE)) return 0;
 	
-	size_t write_count = 0;
+	uint32_t write_count = 0;
 	while ((write_count < count) && ((write_count > 0 ? write_count : 1) * size < (file->partition->size - file->partition->used_count))) {
 		write_count++;
 	}

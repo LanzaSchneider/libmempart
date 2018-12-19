@@ -23,29 +23,30 @@ typedef struct mempart_file_node_t mempart_file_node_t;
  * ---------------------------------------------------
 */
 typedef struct mempart_t{
-	size_t size;						// The byte size of partition.
-	size_t used_count;					// The byte size of used spaces.
+	uint32_t size;						// The byte size of partition.
+	uint32_t used_count;					// The byte size of used spaces.
 	mempart_file_node_t* first_node;	// The first file node.
 } mempart_t;
 
 /* Create and dispose */
 // Create a new memory partition. return NULL if failed.
-mempart_t* mempart_create(size_t size);
+mempart_t* mempart_create(uint32_t size);
 // Release a memory partition.
 void mempart_release(mempart_t* mempart);
 
 /* Load and Save */
 // Load a memory partition from a memory buffer, return NULL if failed.
-mempart_t* mempart_load(const void* data, size_t size);
+mempart_t* mempart_load(const void* data, uint32_t size);
 // Get the size of the memory dump buffer.
-size_t mempart_dump_size(mempart_t* mempart);
+uint32_t mempart_dump_size(mempart_t* mempart);
 // Dump a memory partition, return 0 if failed.
-size_t mempart_dump(mempart_t* mempart, void* buffer);
+uint32_t mempart_dump(mempart_t* mempart, void* buffer);
 
 /* File utils. */
 // Open a memory file in partition, return a non-zero value if failed.
 #define MEMFILE_OPEN_ERR_NOMEMORY		-1
 #define MEMFILE_OPEN_ERR_MODE_ERROR		-2
+#define MEMFILE_OPEN_ERR_NAME_TOOLONG	-3
 #define MEMFILE_OPEN_ERR_UNKNOWN		-10
 #define MEMFILE_OPEN_ERR_NOEXIST		-19
 int mempart_file_open(mempart_t* mempart, const char* filename, const char* mode, mempart_file_t** file);
@@ -78,8 +79,8 @@ typedef struct mempart_file_node_t {
 typedef struct mempart_file_t{
 	mempart_t* partition;				// The partition that this file belong to.
 	void* buffer;						// The contents of this file.
-	size_t size;						// The size of this file.
-	size_t cursor;						// The cursor of this file.
+	uint32_t size;						// The size of this file.
+	uint32_t cursor;						// The cursor of this file.
 	uint32_t flags;						// The file flags.
 } mempart_file_t;
 
@@ -87,7 +88,7 @@ typedef struct mempart_file_t{
 int mempart_file_seek(mempart_file_t* file, long offset, int whence);
 long mempart_file_tell(mempart_file_t* file);
 void mempart_file_rewind(mempart_file_t* file);
-size_t mempart_file_read(mempart_file_t* file, void* buffer, size_t size, size_t count);
-size_t mempart_file_write(mempart_file_t* file, const void* buffer, size_t size, size_t count);
+uint32_t mempart_file_read(mempart_file_t* file, void* buffer, uint32_t size, uint32_t count);
+uint32_t mempart_file_write(mempart_file_t* file, const void* buffer, uint32_t size, uint32_t count);
 
 #endif
