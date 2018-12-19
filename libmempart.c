@@ -42,7 +42,7 @@ void mempart_release(mempart_t* mempart) {
 		node = node->next;
 		libmempart_free(delete_node);
 	}
-	free(mempart);
+	libmempart_free(mempart);
 }
 
 /* Load and Save */
